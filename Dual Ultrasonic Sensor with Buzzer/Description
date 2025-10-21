@@ -15,25 +15,13 @@ This setup is suitable for parking assistance, collision avoidance, or direction
 Breadboard and jumper wires
 
 ⚙️ Pin Configuration
-Component	Arduino Pin	Description
-Ultrasonic Sensor 1 (SIG)	D2	Signal pin for distance measurement (e.g., left sensor)
-Ultrasonic Sensor 2 (SIG)	D3	Signal pin for distance measurement (e.g., right sensor)
-Buzzer 1	D4	Activates when Sensor 1 detects an object closer than 30 cm
-Buzzer 2	D5	Activates when Sensor 2 detects an object closer than 30 cm
+Component	                    Arduino         Pin	Description
+Ultrasonic Sensor 1 (SIG)	    D2	            Signal pin for distance measurement (e.g., left sensor)
+Ultrasonic Sensor 2 (SIG)	    D3	            Signal pin for distance measurement (e.g., right sensor)
+Buzzer 1	                    D4	            Activates when Sensor 1 detects an object closer than 30 cm
+Buzzer 2	                    D5	            Activates when Sensor 2 detects an object closer than 30 cm
 
 Both sensors share VCC = 5 V and GND connections with the Arduino.
-
-🧠 Working Principle
-
-Each ultrasonic sensor transmits an ultrasonic pulse and listens for the echo.
-
-The Arduino measures the time it takes for the echo to return to calculate the distance (distance = duration × 0.034 / 2).
-
-When the measured distance is less than 30 cm, the buzzer linked to that sensor turns ON.
-
-This allows you to know which side (left or right) the obstacle is detected on.
-
-The serial monitor continuously displays both distance readings for real-time monitoring.
 
 🖥️ Example Serial Output
 Distance 1: 18 cm    Distance 2: 42 cm
