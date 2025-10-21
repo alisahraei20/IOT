@@ -1,1 +1,47 @@
+#define ULTRASONIC1_SIG 2
+#define ULTRASONIC2_SIG 3
+#define BUZZER1 4
+#define BUZZER2 5
+
+long distance1, distance2;
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(BUZZER1, OUTPUT);
+  pinMode(BUZZER2, OUTPUT);
+}
+
+long readDistance(int sigPin) {
+  pinMode(sigPin, OUTPUT);
+  digitalWrite(sigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(sigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(sigPin, LOW);
+  
+  pinMode(sigPin, INPUT);
+  long duration = pulseIn(sigPin, HIGH, 30000); // 30 ms timeout
+  long distance = duration * 0.034 / 2;
+  return distance;
+}
+
+void loop() {
+  distance1 = readDistance(ULTRASONIC1_SIG);
+  delay(50);
+  distance2 = readDistance(ULTRASONIC2_SIG);
+
+  Serial.print("Distance 1: ");
+  Serial.print(distance1);
+  Serial.print(" cm\t");
+
+  Serial.print("Distance 2: ");
+  Serial.print(distance2);
+  Serial.println(" cm");
+
+  // Trigger buzzer if object is closer than 30 cm
+  digitalWrite(BUZZER1, distance1 < 30 ? HIGH : LOW);
+  digitalWrite(BUZZER2, distance2 < 30 ? HIGH : LOW);
+
+  delay(200);
+}
 
