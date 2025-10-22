@@ -1,1 +1,48 @@
+Doppler Radar & Ultrasonic Object Detection System (Arduino)
 
+🧭 Overview
+
+This project integrates a BGT24LTR11 Doppler Radar and a single-pin Ultrasonic sensor with an Arduino microcontroller to detect moving objects, estimate their approach speed, and measure distance simultaneously. When an object is approaching within 50 cm at a reasonable speed (< 100 m/s), an audible buzzer alarm is activated as an early warning signal.
+
+This setup is suitable for collision avoidance, smart vehicle safety systems, bicycle or robotic proximity alert, and IoT-based early warning applications.
+
+⚙️ Hardware Components
+Component	                            Function	                                Notes
+Arduino Uno / Mega (AVR-based)	      Main controller	                          Handles serial communication and sensor logic
+BGT24LTR11 Doppler Radar	            Measures object motion and speed	        Communicates via serial (115200 bps)
+Ultrasonic Sensor (Single Pin Type)	  Measures distance	                        Trigger and Echo share one SIG pin
+Buzzer	                              Audio warning output	                    Activated when object detected within threshold distance
+Jumper Wires & Breadboard	            Connections	                              Standard prototyping setup
+
+📡 Pin Connections
+Arduino Pin	  Connected Component	      Description
+D2	          Radar RX	                Receives serial data from radar
+D3	          Radar TX	                Transmits serial data to radar
+D4	          Buzzer	                  Digital output – activates alarm
+D5	          Ultrasonic Sensor (SIG)	  Combined Trigger/Echo pin
+5V / GND	    All sensors	              Power supply
+
+Note: SoftwareSerial is used to communicate with the radar module, so hardware UART remains available for debugging via USB Serial Monitor.
+
+
+🧠 Working Principle
+
+Doppler Radar (BGT24LTR11):
+Detects motion and determines the target’s relative speed (in m/s).
+Provides target state:
+2 → Approaching
+1 → Leaving
+0 → No target
+Ultrasonic Sensor:
+Sends a 10 µs trigger pulse and measures the return echo.
+Calculates distance in centimeters using duration / 58.0.
+
+Control Logic:
+When target state = 2 (approaching) and distance < 50 cm and speed < 100 m/s,
+→ Buzzer ON (digitalWrite(BUZZER_PIN, HIGH)).
+Otherwise, buzzer remains OFF with debug messages shown in the Serial Monitor.
+
+🧾 Serial Output Example
+Speed: 0.83 m/s
+Distance: 42 cm
+🚨 Approaching object <50 cm & <100 m/s → Buzzer ON
