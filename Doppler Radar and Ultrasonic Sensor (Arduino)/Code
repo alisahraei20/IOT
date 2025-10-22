@@ -1,1 +1,78 @@
+#include "BGT24LTR11.h"
+
+#ifdef __AVR__
+#include <SoftwareSerial.h>
+SoftwareSerial SSerial(2, 3); // Radar: RX=2, TX=3
+#define COMSerial SSerial
+#define ShowSerial Serial
+BGT24LTR11<SoftwareSerial> GBT;
+#endif
+
+#define BUZZER_PIN 4
+#define ULTRASONIC_PIN 5  // SIG pin (trigger/echo combo)
+
+void setup() {
+  ShowSerial.begin(9600);
+  COMSerial.begin(115200);
+  pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(ULTRASONIC_PIN, OUTPUT);
+  digitalWrite(BUZZER_PIN, LOW);
+
+  while (!ShowSerial);
+  while (!COMSerial);
+
+  GBT.init(COMSerial);
+
+  bool success = GBT.setMode(0);
+  if (!success) {
+    ShowSerial.println("❌ Failed to set radar mode!");
+  } else {
+    ShowSerial.println("✅ Radar mode set successfully.");
+  }
+}
+
+long readUltrasonicCM() {
+  pinMode(ULTRASONIC_PIN, OUTPUT);
+  digitalWrite(ULTRASONIC_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(ULTRASONIC_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(ULTRASONIC_PIN, LOW);
+
+  pinMode(ULTRASONIC_PIN, INPUT);
+  long duration = pulseIn(ULTRASONIC_PIN, HIGH, 30000); // timeout: 30ms
+  long distance = duration / 58.0;  // Convert microseconds to cm
+  return distance;
+}
+
+void loop() {
+
+  float speed = GBT.getSpeed();               // Already in m/s
+  uint16_t state = GBT.getTargetState();      // 2 = approaching
+
+  ShowSerial.print("Speed: ");
+  ShowSerial.print(speed);
+  ShowSerial.println(" m/s");
+
+  long distance = readUltrasonicCM();
+  ShowSerial.print("Distance: ");
+  ShowSerial.print(distance);
+  ShowSerial.println(" cm");
+
+  if (state == 2 && distance > 0 && distance < 50 && speed < 100) {
+    ShowSerial.println("🚨 Approaching object <50 cm & <100 m/s → Buzzer ON");
+    digitalWrite(BUZZER_PIN, HIGH);
+  } else {
+    digitalWrite(BUZZER_PIN, LOW);
+
+    if (state == 2)
+      ShowSerial.println("➡️ Approaching but too far or too fast");
+    else if (state == 1)
+      ShowSerial.println("⬅️ Leaving");
+    else
+      ShowSerial.println("🟡 No target");
+  }
+
+  delay(300);
+}
 
