@@ -1,0 +1,31 @@
+IR Object Detection Using Arduino (Two Sensors)
+🧩 Overview
+
+This Arduino project demonstrates how to interface two Infrared (IR) obstacle detection sensors with an Arduino board. The system continuously reads both sensors and reports whether an object is detected in front of either sensor through the Serial Monitor.
+It can be used in applications such as robot navigation, line following, or collision avoidance.
+
+⚙️ Components Used
+Arduino Uno (or compatible board)
+1- 2 × IR Obstacle Avoidance Sensors (with OUT pins)
+2- Jumper Wires
+3- USB Cable for Programming and Power
+
+🔌 Pin Configuration
+Component	                Arduino Pin	                Description
+IR Sensor 1 (OUT)	            D7	            Digital input for first sensor
+IR Sensor 2 (OUT)	            D8	            Digital input for second sensor
+IR Sensors (VCC)	            5V	            Power supply for sensors
+IR Sensors (GND)	            GND	            Common ground
+
+
+Each sensor typically has three pins:
+
+VCC (5V) – Power supply
+GND – Ground
+OUT – Digital signal output (LOW when object detected, HIGH when clear)
+
+💻 Code Explanation
+
+The Arduino continuously reads digital signals from both IR sensors.
+When an object is in front of a sensor, its output becomes LOW.
+The Serial Monitor displays the detection status for each sensor.
