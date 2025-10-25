@@ -1,0 +1,42 @@
+Project with Three Ultrasonic Sensors and Two Vibration Motors
+This Arduino-based project integrates three ultrasonic sensors (HC-SR04) and two A-3ONE3 encapsulated vibration motors (8000 ± 2000 RPM) to detect nearby objects and provide vibration feedback. The system measures distance around the setup and triggers vibration motors according to object detection logic.
+
+Hardware Setup
+Device	                                  Purpose	                                    Arduino Pin	                              Notes
+HC-SR04 Ultrasonic Sensor 1	              Detects objects in Zone 1	                Trig: 2, Echo: 3	                    Triggers Motor 1
+HC-SR04 Ultrasonic Sensor 2	              Detects objects in Zone 2	                Trig: 4, Echo: 5	                    Triggers Motor 2
+HC-SR04 Ultrasonic Sensor 3	              Detects objects in Zone 3	                Trig: 6, Echo: 7	                    Triggers both motors
+A-3ONE3 Vibration Motor 1	                Provides haptic feedback for Zone 1	      8 (via NPN transistor + diode)	
+A-3ONE3 Vibration Motor 2	                Provides haptic feedback for Zone 2	      9 (via NPN transistor + diode)	
+NPN Transistors (e.g., 2N2222/BC547)	    Drives each motor safely	                Base connected through 1 kΩ resistor	
+Diodes (e.g., 1N4007)	                    Flyback protection across each motor	    Cathode to +, anode to –	
+
+Power: Motors can be powered directly from Arduino 5 V if current draw is small. For stronger vibration or longer run time, an external 3–5 V source is recommended. All grounds must be common.
+Operating Logic
+•	Motor 1 ON: Sensor 1 detects an object within the set threshold.
+•	Motor 2 ON: Sensor 2 detects an object within the set threshold.
+•	Both Motors ON:
+    o	Sensors 1 and 2 detect objects simultaneously, or
+    o	Sensor 3 detects an object.
+•	All Motors OFF: No detection within the threshold distance.
+Default detection threshold: 50 cm (adjustable in code).
+Software
+    •	Arduino sketch continuously measures distance from all three ultrasonic sensors.
+    •	Applies logic to control the two vibration motors for real-time object alerting.
+    •	Uses transistors and diodes for safe motor switching.
+
+Transistor and Resistor (for each motor)
+For each motor, build this small sub-circuit on the breadboard:
+    •	Transistor placement:
+        o	Flat side facing you. From left to right, the pins are Collector (C) – Base (B) – Emitter (E).
+        o	Insert so each pin is on a separate breadboard row.
+    •	Collector (C): Connect to the motor’s positive terminal.
+    •	Emitter (E): Connect to the ground rail.
+    •	Base (B): Connect to Arduino pin 8 (Motor 1) or pin 9 (Motor 2) through a 1 kΩ resistor.
+
+This arrangement lets the Arduino switch the motors safely using very little current.
+
+Diode (for each motor)
+    •	Place a 1N4007 diode directly across each motor’s two terminals to protect against voltage spikes.
+    •	Cathode (marked with a silver band) → Motor positive side.
+    •	Anode (unmarked side) → Motor negative side.
