@@ -1,0 +1,73 @@
+// --- Pin assignments ---
+#define trigPin1 3
+#define echoPin1 2
+#define trigPin2 5
+#define echoPin2 4
+#define trigPin3 7
+#define echoPin3 6
+
+#define motor1 8
+#define motor2 9
+
+long duration;
+int distance1, distance2, distance3;
+
+void setup() {
+  Serial.begin(9600);
+
+  // Sensors
+  pinMode(trigPin1, OUTPUT); pinMode(echoPin1, INPUT);
+  pinMode(trigPin2, OUTPUT); pinMode(echoPin2, INPUT);
+  pinMode(trigPin3, OUTPUT); pinMode(echoPin3, INPUT);
+
+  // Motors
+  pinMode(motor1, OUTPUT);
+  pinMode(motor2, OUTPUT);
+
+  digitalWrite(motor1, LOW);
+  digitalWrite(motor2, LOW);
+}
+
+int getDistance(int trigPin, int echoPin) {
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+
+  duration = pulseIn(echoPin, HIGH, 30000); // timeout 30 ms
+  if (duration == 0) return 999;            // no echo
+  return duration * 0.034 / 2;              // distance in cm
+}
+
+void loop() {
+  // Read distances
+  distance1 = getDistance(trigPin1, echoPin1);
+  distance2 = getDistance(trigPin2, echoPin2);
+  distance3 = getDistance(trigPin3, echoPin3);
+
+  // Determine motor states
+  bool motor1_on = false;
+  bool motor2_on = false;
+
+  // Trigger distance set to 30 cm
+  if (distance1 < 30) motor1_on = true;
+  if (distance2 < 30) motor2_on = true;
+
+  // If Sensor 1 and 2 both detect, or Sensor 3 detects
+  if ((distance1 < 30 && distance2 < 30) || distance3 < 30) {
+    motor1_on = true;
+    motor2_on = true;
+  }
+
+  // Drive the motors
+  digitalWrite(motor1, motor1_on ? HIGH : LOW);
+  digitalWrite(motor2, motor2_on ? HIGH : LOW);
+
+  // Debug output
+  Serial.print("D1:"); Serial.print(distance1);
+  Serial.print("  D2:"); Serial.print(distance2);
+  Serial.print("  D3:"); Serial.println(distance3);
+
+  delay(200);
+}
