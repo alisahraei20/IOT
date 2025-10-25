@@ -1,0 +1,61 @@
+HLK-LD2410C mmWave Radar — Distance-Only Detection (Arduino Mega 2560 R3)
+
+🧩 Overview
+This Arduino project demonstrates how to interface the HLK-LD2410C millimeter-wave radar sensor with an Arduino Mega 2560 R3 using UART communication only (no OUT pin required).
+The sketch reads the sensor’s serial data frames, extracts distance and presence information, applies a 50 cm detection threshold, and prints Yes or No to indicate object presence.
+
+This implementation is robust against noise and firmware-independent, automatically handling both common HLK frame formats.
+
+🔌 Pin Configuration
+HLK-LD2410C Pin	                            Arduino Mega 2560 R3 Pin	                                  Description
+TX	                                                  RX1 (Pin 19)	                          Sensor transmits serial data to Mega
+RX	                                                  TX1 (Pin 18)	                          Mega transmits configuration data (optional) to sensor
+VCC	                                                  5 V (or 3.3 V if required)	            Power supply
+GND	                                                  GND	                                    Common ground
+
+⚠️ Note: When connecting Mega TX1 (18) → Sensor RX, use a voltage divider (e.g., 3.3 kΩ to RX, 1.8 kΩ from RX to GND) to reduce 5 V logic to 3.3 V safe levels.
+
+⚙️ Parameters (Adjustable in Code)
+Parameter	                                                      Default	                                          Purpose
+SENSOR_BAUD	                                                    256000	                      Sensor serial baud rate (set to 115200 if required)
+THRESH_CM	                                                        50 cm	                      Detection threshold distance
+HYSTERESIS	                                                      2 cm	                      Adds stability (object must move > 52 cm to reset “No”)
+NOISE_FLOOR	                                                      5 cm	                      Ignores false readings below 5 cm
+WINDOW_MS	                                                        1200 ms	                    Data collection window for frame analysis
+
+💻 How It Works
+Frame Parsing:
+The code reads binary data frames from the radar sensor and detects their header/tail patterns.
+
+Distance Extraction:
+It parses the payload to extract the nearest detected distance in cm (or mm → cm auto-converted).
+
+Presence Logic:
+If a target is detected within ≤ 50 cm (THRESH_CM), the system prints "Yes" — otherwise "No".
+
+Noise Filtering:
+Multiple consistent readings are required within a 1.2 s window to reduce false triggers.
+
+Serial Output:
+The status and debug lines are printed to the Serial Monitor for observation.
+
+📊 Expected Serial Monitor Output (baud rate = 115200)
+Yes  dbg presence=1 nearest_cm=42
+No  dbg presence=0 nearest_cm=-1
+Yes  dbg presence=1 nearest_cm=48
+
+Meaning:
+Yes → object detected within 50 cm
+No → no nearby target detected
+Debug lines show raw presence bit and computed nearest distance in centimeters
+
+🧠 Results & Applications
+Provides reliable short-range detection (≈ 0–100 cm) using the HLK-LD2410C.
+No need for the sensor’s digital OUT pin — full data is parsed via UART.
+Useful for collision avoidance, proximity sensing, smart bicycles, or IoT distance-based triggers.
+
+🛠️ Hardware Requirements
+Arduino Mega 2560 R3
+HLK-LD2410C mmWave radar module
+Two resistors (3.3 kΩ and 1.8 kΩ for TX → RX voltage divider)
+Jumper wires
