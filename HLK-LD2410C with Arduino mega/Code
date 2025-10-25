@@ -1,0 +1,193 @@
+// # HLK-LD2410C with Arduino mega
+
+// HLK-LD2410C robust distance-only detection (Arduino Mega 2560 R3)
+// Presence inferred from UART payload (no OUT pin used).
+// Pins:
+//   Sensor TX -> Mega RX1 (pin 19)
+//   Sensor RX <- Mega TX1 (pin 18) via divider (3.3k to RX, 1.8k RX->GND)
+// Power: VCC->5V (or 3.3V if required), GND->GND
+
+#include <Arduino.h>
+
+#define SENSOR_BAUD   256000   // set to 115200 if your sniffer showed 115200
+#define THRESH_CM     50       // trigger at <= 30 cm
+#define HYSTERESIS    2        // release at > 32 cm
+#define NOISE_FLOOR   5        // ignore <5 cm as noise
+#define CONSISTENCE_TOL 10     // cm within two frames to accept as consistent
+#define WINDOW_MS     1200     // collection window for frames
+
+// Two common HLK frame styles:
+const uint8_t HDR1[4]  = {0xF4,0xF3,0xF2,0xF1};
+const uint8_t TAIL1[4] = {0xF8,0xF7,0xF6,0xF5};
+const uint8_t HDR2[4]  = {0xFD,0xFC,0xFB,0xFA};
+const uint8_t TAIL2[4] = {0x04,0x03,0x02,0x01};
+
+uint8_t frameBuf[512];
+bool isNear = false;
+
+static inline bool match4(const uint8_t *a, const uint8_t *b) {
+  return a[0]==b[0] && a[1]==b[1] && a[2]==b[2] && a[3]==b[3];
+}
+
+bool readN(HardwareSerial &s, uint8_t *dst, size_t n, uint16_t to_ms=40) {
+  unsigned long t0 = millis(); size_t i = 0;
+  while (i < n && (millis() - t0) < to_ms) if (s.available()) dst[i++] = s.read();
+  return i == n;
+}
+
+// Read one frame (supports both header/tail styles, with length or tail-scan)
+bool readFrame(const uint8_t* &payload, size_t &plen) {
+  uint8_t win[4] = {0,0,0,0}; int which = 0; unsigned long t0 = millis();
+  while (millis() - t0 < 80) {
+    if (Serial1.available()) {
+      win[0]=win[1]; win[1]=win[2]; win[2]=win[3]; win[3]=uint8_t(Serial1.read());
+      if (match4(win, HDR1)) { which=1; break; }
+      if (match4(win, HDR2)) { which=2; break; }
+    }
+  }
+  if (!which) return false;
+
+  uint8_t len2[2]; if (!readN(Serial1, len2, 2)) return false;
+  uint16_t L = (uint16_t)len2[0] | ((uint16_t)len2[1] << 8);
+  bool useLen = (L > 0 && L <= 400);
+  const uint8_t* expectTail = (which==1 ? TAIL1 : TAIL2);
+
+  if (useLen) {
+    size_t need = (size_t)L + 4;
+    if (!readN(Serial1, frameBuf, need)) return false;
+    if (!match4(&frameBuf[L], expectTail)) return false;
+    payload = frameBuf; plen = L; return true;
+  } else {
+    size_t pos=0; unsigned long t1 = millis();
+    while (millis() - t1 < 100) {
+      while (Serial1.available()) {
+        if (pos >= sizeof(frameBuf)) return false;
+        frameBuf[pos++] = uint8_t(Serial1.read());
+        if (pos >= 4 && match4(&frameBuf[pos-4], expectTail)) {
+          payload = frameBuf; plen = pos - 4; return true;
+        }
+      }
+    }
+    return false;
+  }
+}
+
+// Extract presence + nearest distance from payload if it's the AA...55 00 "target data" form
+// Returns: presenceFound (true if moving/static target indicated), and sets nearestCm (>0) if available
+bool parseTargetData(const uint8_t *p, size_t L, uint16_t &nearestCm) {
+  nearestCm = 0;
+  if (!(L >= 4 && p[0]==0xAA && p[L-2]==0x55 && p[L-1]==0x00)) return false;
+
+  // Layout (varies slightly by fw). Common pattern:
+  // p[1]=type (0x02 normal, 0x01 engineering)
+  // p[2]=target_state bits (bit0 moving, bit1 stationary)
+  uint8_t dtype = p[1];
+  size_t i = 2;
+  if (i >= L-2) return false;
+  uint8_t target_state = p[i]; i += 1;
+
+  bool moving    = target_state & 0x01;
+  bool stationary= target_state & 0x02;
+  bool presence  = moving || stationary;
+
+  // moving distance (2B LE) if present
+  if (i + 1 < L-2) {
+    uint16_t mv = (uint16_t)p[i] | ((uint16_t)p[i+1] << 8);
+    if (mv > 0) nearestCm = (nearestCm==0 ? mv : min(nearestCm, mv));
+  }
+  i += 2;
+
+  // skip moving energy if present
+  if (i < L-2) i += 1;
+
+  // stationary distance (2B LE) if present
+  if (i + 1 < L-2) {
+    uint16_t st = (uint16_t)p[i] | ((uint16_t)p[i+1] << 8);
+    if (st > 0) nearestCm = (nearestCm==0 ? st : min(nearestCm, st));
+  }
+
+  // Normalize to cm if the values look like mm/dm (simple guards)
+  if (nearestCm > 600 && nearestCm <= 6000) nearestCm = (nearestCm + 5)/10;
+  else if (nearestCm > 6000)                nearestCm = (nearestCm + 50)/100;
+
+  return presence;
+}
+
+// Fallback: scan all 16-bit words for plausible cm candidates (used if no AA frame)
+uint16_t bruteNearestCm(const uint8_t *p, size_t L) {
+  uint16_t best = 0;
+  for (size_t k=0; k+1<L; ++k) {
+    uint16_t v = (uint16_t)p[k] | ((uint16_t)p[k+1] << 8);
+    if (!v) continue;
+    uint16_t cm = 0;
+    if (v <= 600) cm = v;
+    else if (v <= 6000) cm = (v + 5)/10;
+    else if (v <= 60000) cm = (v + 50)/100;
+    if (cm >= NOISE_FLOOR && cm <= 1000) best = (best==0 ? cm : (cm < best ? cm : best));
+  }
+  return best;
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial1.begin(SENSOR_BAUD);
+  Serial.println("LD2410C: distance-only with presence inferred from UART (no OUT pin).");
+}
+
+void loop() {
+  bool presence = false;
+  uint16_t d1 = 0, d2 = 0;
+  bool have1 = false, have2 = false;
+
+  unsigned long t0 = millis();
+  while (millis() - t0 < WINDOW_MS) {
+    const uint8_t* payload; size_t plen;
+    if (readFrame(payload, plen)) {
+      uint16_t nearestCm = 0;
+      bool pFromAA = parseTargetData(payload, plen, nearestCm);
+      if (pFromAA) presence = true;
+
+      // If no AA layout (or nearest not found), use brute scan as a hint
+      if (nearestCm == 0) {
+        uint16_t b = bruteNearestCm(payload, plen);
+        if (b > 0) nearestCm = b;
+      }
+
+      if (nearestCm >= NOISE_FLOOR) {
+        if (!have1) { d1 = nearestCm; have1 = true; }
+        else if (!have2 && abs((int)nearestCm - (int)d1) <= CONSISTENCE_TOL) { d2 = nearestCm; have2 = true; }
+      }
+      if (have1 && have2) break;
+    }
+  }
+
+  // Decide: need presence OR two consistent distances; then apply hysteresis
+  bool haveReliableDist = (have1 && have2);
+  uint16_t nearest = haveReliableDist ? min(d1, d2) : 0;
+
+  // If neither presence nor reliable distance, report "No"
+  if (!presence && !haveReliableDist) {
+    isNear = false;
+    Serial.println("No");
+    Serial.println("dbg presence=0 nearest_cm=-1");
+    delay(150);
+    return;
+  }
+
+  // Apply threshold + hysteresis on nearest (if we have it)
+  if (haveReliableDist) {
+    if (!isNear && nearest <= THRESH_CM) isNear = true;
+    else if (isNear && nearest > THRESH_CM + HYSTERESIS) isNear = false;
+
+    Serial.println(isNear ? "Yes" : "No");
+    Serial.print("dbg presence="); Serial.print(presence ? 1 : 0);
+    Serial.print(" nearest_cm=");  Serial.println((int)nearest);
+  } else {
+    // presence true but no reliable distance -> treat as far (or print status)
+    isNear = false;
+    Serial.println("No");
+    Serial.print("dbg presence="); Serial.println(1);
+  }
+
+  delay(150);
+}
