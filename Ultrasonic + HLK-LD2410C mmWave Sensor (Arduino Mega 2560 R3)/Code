@@ -1,0 +1,127 @@
+// Mega 2560: 1x Ultrasonic (Trig=7, Echo=6) + 1x HLK-LD2410C (TX->RX1=19)
+// Shows each sensor distance separately with YES/NO if < 50 cm, plus ANY flag.
+// Uses a strict HLK frame parser to avoid false positives. OUT pin is ignored.
+
+#include <Arduino.h>
+
+// --------- PINS ---------
+#define TRIG_PIN 7
+#define ECHO_PIN 6
+#define LD_OUT_PIN 22   // not used now
+
+// --------- CONFIG ---------
+#define THRESH_CM       50
+#define SENSOR_BAUD     256000   // change to 115200 if your LD2410C is set to that
+
+// HLK-LD2410C headers/tails (two common formats)
+const uint8_t HDR1[4]  = {0xF4,0xF3,0xF2,0xF1};
+const uint8_t TAIL1[4] = {0xF8,0xF7,0xF6,0xF5};
+const uint8_t HDR2[4]  = {0xFD,0xFC,0xFB,0xFA};
+const uint8_t TAIL2[4] = {0x04,0x03,0x02,0x01};
+
+static inline bool match4(const uint8_t *a, const uint8_t *b){
+  return a[0]==b[0] && a[1]==b[1] && a[2]==b[2] && a[3]==b[3];
+}
+
+static inline bool readN_S1(uint8_t *dst, size_t n, uint16_t to_ms=80){
+  unsigned long t0=millis(); size_t i=0;
+  while (i<n && (millis()-t0)<to_ms) if (Serial1.available()) dst[i++]=Serial1.read();
+  return i==n;
+}
+
+// STRICT: accept only packets that start with HDR{1|2}, include a 2B length, and end with the matching tail
+bool readStrictFrame(const uint8_t* &payload, size_t &plen){
+  uint8_t win[4]={0,0,0,0}; int which=0; unsigned long t0=millis();
+  while ((millis()-t0) < 120){
+    if (Serial1.available()){
+      win[0]=win[1]; win[1]=win[2]; win[2]=win[3]; win[3]=(uint8_t)Serial1.read();
+      if (match4(win, HDR1)) { which=1; break; }
+      if (match4(win, HDR2)) { which=2; break; }
+    }
+  }
+  if (!which) return false;
+
+  uint8_t len2[2]; if (!readN_S1(len2, 2)) return false;
+  uint16_t L = (uint16_t)len2[0] | ((uint16_t)len2[1]<<8);
+  if (L==0 || L>400) return false;
+
+  static uint8_t buf[512];
+  const uint8_t* tail = (which==1 ? TAIL1 : TAIL2);
+  if (!readN_S1(buf, L+4)) return false;       // payload + tail
+  if (!match4(&buf[L], tail)) return false;
+
+  payload = buf; plen = L; return true;
+}
+
+// Conservative nearest distance (cm) from a valid HLK payload
+uint16_t extractNearestCm(const uint8_t* p, size_t L){
+  uint16_t best=0;
+  for (size_t k=0; k+1<L; ++k){
+    uint16_t v = (uint16_t)p[k] | ((uint16_t)p[k+1] << 8);
+    if (!v) continue;
+    uint16_t cm=0;
+    if (v<=600) cm=v;                 // cm
+    else if (v<=6000) cm=(v+5)/10;    // mm/dm-ish -> cm
+    else if (v<=60000) cm=(v+50)/100; // mm -> cm
+    if (cm>=5 && cm<=1000){
+      best = (best==0 ? cm : (cm<best ? cm : best));
+    }
+  }
+  return best; // 0 = none
+}
+
+// Ultrasonic read (returns 999 if no echo)
+int readUltrasonicCm(uint8_t trig, uint8_t echo){
+  digitalWrite(trig, LOW); delayMicroseconds(2);
+  digitalWrite(trig, HIGH); delayMicroseconds(10);
+  digitalWrite(trig, LOW);
+  long dur = pulseIn(echo, HIGH, 30000UL); // 30 ms
+  if (dur==0) return 999;
+  return (int)(dur * 0.034 / 2.0);
+}
+
+void setup(){
+  Serial.begin(115200);
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(LD_OUT_PIN, INPUT); // not used
+  Serial1.begin(SENSOR_BAUD);
+
+  // Flush any boot noise on Serial1
+  unsigned long t0=millis(); while ((millis()-t0)<100) while(Serial1.available()) Serial1.read();
+
+  Serial.println("Ultrasonic + STRICT LD2410C UART. Threshold=50 cm. OUT ignored.");
+  Serial.println("Format: US=<cm|n/a> [YES/NO] | MM=<cm|n/a> [YES/NO] | ANY=YES/NO");
+}
+
+void loop(){
+  // --- Ultrasonic ---
+  int us = readUltrasonicCm(TRIG_PIN, ECHO_PIN);
+  bool us_valid = (us>0 && us<999);
+  bool us_yes   = (us_valid && us <= THRESH_CM);
+
+  // --- mmWave (strict frames only) ---
+  uint16_t mm_cm = 0; bool mm_valid=false, mm_yes=false;
+  const uint8_t* payload; size_t plen;
+  if (readStrictFrame(payload, plen)){
+    mm_cm = extractNearestCm(payload, plen);
+    mm_valid = (mm_cm > 0);
+    mm_yes   = (mm_valid && mm_cm <= THRESH_CM);
+  }
+
+  bool any_yes = (us_yes || mm_yes);
+
+  // --- Print one clear line ---
+  Serial.print("US=");
+  if (us_valid) { Serial.print(us); Serial.print("cm "); Serial.print(us_yes ? "[YES]" : "[NO]"); }
+  else { Serial.print("n/a [NO]"); }
+
+  Serial.print(" | MM=");
+  if (mm_valid) { Serial.print(mm_cm); Serial.print("cm "); Serial.print(mm_yes ? "[YES]" : "[NO]"); }
+  else { Serial.print("n/a [NO]"); }
+
+  Serial.print(" | ANY=");
+  Serial.println(any_yes ? "YES" : "NO");
+
+  delay(120);
+}
