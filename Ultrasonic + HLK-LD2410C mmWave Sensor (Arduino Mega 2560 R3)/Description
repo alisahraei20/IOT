@@ -1,0 +1,67 @@
+Ultrasonic + HLK-LD2410C mmWave Sensor Integration (Arduino Mega 2560 R3)
+🧩 Overview
+
+This project combines an HC-SR04 ultrasonic sensor and a HLK-LD2410C millimeter-wave radar to measure distance and detect nearby objects.
+It prints both sensor readings separately on the Serial Monitor and outputs YES/NO decisions based on a 50 cm detection threshold, along with a combined ANY flag when either sensor detects an object.
+
+The HLK-LD2410C is read through UART frames (no OUT pin used), using a strict binary frame parser to avoid false readings.
+
+🔌 Pin Configuration
+Component	                    Arduino Mega Pin	                              Description
+HC-SR04 Trig	                    D7	                                    Ultrasonic trigger pin
+HC-SR04 Echo	                    D6	Ultrasonic echo input
+HLK-LD2410C                       TX	RX1 → Pin 19	                    Sensor transmits data to Arduino
+HLK-LD2410C                       RX	TX1 → Pin 18	                     Arduino sends data (optional)
+HLK-LD2410C                       VCC	5 V (or 3.3 V if required)	              Power supply
+HLK-LD2410C                       GND	GND	                                      Common ground
+LD_OUT (optional)	                D22	                                Declared but unused in this sketch
+
+⚠️ Voltage Divider: Use a simple divider (e.g., 3.3 kΩ to RX and 1.8 kΩ from RX→GND) on the LD2410C RX line to protect the 3.3 V logic input from Arduino’s 5 V TX1.
+
+⚙️ Adjustable Parameters
+  Parameter	                                        Default	                                      Purpose
+THRESH_CM	                                            50 cm                          	Trigger threshold for detection
+SENSOR_BAUD	                                          256000	                        HLK-LD2410C UART baud rate (use 115200 bps if your module is configured that way)
+🧠 Working Principle
+
+Ultrasonic Sensor:
+The HC-SR04 measures distance by timing the echo pulse. If the measured distance ≤ 50 cm, it reports YES.
+
+mmWave Radar (LD2410C):
+The Arduino reads UART frames from the radar module, validates them with strict header/tail matching, and extracts the nearest distance in centimeters.
+Distances ≤ 50 cm are marked YES.
+
+Combined Decision:
+If either sensor detects an object (YES), the system sets ANY=YES.
+
+Output Format:
+Results are continuously printed to the Serial Monitor at 115200 baud.
+
+📟 Expected Serial Output
+US=37cm [YES] | MM=42cm [YES] | ANY=YES
+US=61cm [NO]  | MM=45cm [YES] | ANY=YES
+US=78cm [NO]  | MM=n/a [NO]   | ANY=NO
+US=n/a [NO]   | MM=32cm [YES] | ANY=YES
+
+
+Explanation:
+
+US → Ultrasonic distance reading
+MM → Millimeter-wave radar reading
+ANY → Combined trigger flag (YES if either detects an object ≤ 50 cm)
+
+🧾 Results
+Real-time distance measurement from both sensors displayed in centimeters
+Clear YES/NO decision for each sensor and combined detection status
+Reliable detection due to strict UART frame parsing for the HLK-LD2410C
+Ideal for collision avoidance, smart bicycle systems, parking assist, or IoT distance detection projects
+
+🧰 Hardware Requirements
+Arduino Mega 2560 R3
+HC-SR04 Ultrasonic Sensor
+
+HLK-LD2410C mmWave Radar Module
+
+Resistors: 3.3 kΩ and 1.8 kΩ (for TX → RX level shifting)
+
+Jumper wires and breadboard
