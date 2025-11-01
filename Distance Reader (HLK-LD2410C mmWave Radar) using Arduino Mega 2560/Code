@@ -1,0 +1,103 @@
+/* Arduino Mega 2560 — HLK-LD2410C mmWave Radar (Move Distance Only)
+ * Wiring:
+ *   HLK TX -> Mega RX3 (pin 15)
+ *   HLK GND -> GND
+ *   HLK VCC -> 5V
+ *
+ * Serial3 = radar UART (default 256000 baud)
+ * Serial  = USB (115200) for Serial Monitor
+ */
+
+#include <Arduino.h>
+
+// ---------- Configuration ----------
+const uint32_t PC_BAUD  = 115200;   // Serial Monitor
+const uint32_t HLK_BAUD = 256000;   // HLK default UART baud
+
+// Frame markers
+const uint8_t HDR[4]  = {0xF4, 0xF3, 0xF2, 0xF1};
+const uint8_t TAIL[4] = {0xF8, 0xF7, 0xF6, 0xF5};
+
+// Buffers
+const size_t MAXF = 128;
+uint8_t buf[MAXF];
+size_t  blen = 0;
+
+// ---- Helper: find byte sequence ----
+int findSeq(const uint8_t* hay, size_t n, const uint8_t* needle, size_t m) {
+  if (m == 0 || n < m) return -1;
+  for (size_t i = 0; i <= n - m; i++) {
+    bool ok = true;
+    for (size_t j = 0; j < m; j++)
+      if (hay[i + j] != needle[j]) { ok = false; break; }
+    if (ok) return i;
+  }
+  return -1;
+}
+
+// ---- Try to extract only move distance ----
+void tryDecodeMove(const uint8_t* frame, size_t n) {
+  int h = findSeq(frame, n, HDR, 4);
+  int t = findSeq(frame, n, TAIL, 4);
+  if (h < 0 || t < 0 || t <= h + 4) return;
+
+  const uint8_t* pay = frame + h + 4;
+  size_t payLen = (size_t)(t - (h + 4));
+
+  // Typical move distance offsets (layout A/B)
+  uint16_t moveDist = 0xFFFF;
+  bool decoded = false;
+
+  // Layout A
+  if (!decoded && payLen >= 14) {
+    uint16_t mD = (uint16_t)pay[5] | ((uint16_t)pay[6] << 8);
+    if (mD < 600) { moveDist = mD; decoded = true; }
+  }
+
+  // Layout B
+  if (!decoded && payLen >= 16) {
+    uint16_t mD = (uint16_t)pay[7] | ((uint16_t)pay[8] << 8);
+    if (mD < 600) { moveDist = mD; decoded = true; }
+  }
+
+  if (decoded) {
+    Serial.print(F("Move="));
+    Serial.print(moveDist);
+    Serial.println(F("cm"));
+  }
+}
+
+void setup() {
+  Serial.begin(PC_BAUD);
+  Serial3.begin(HLK_BAUD);
+
+  Serial.println();
+  Serial.println(F("Mega2560 — HLK-LD2410C (Move Distance Only)"));
+  Serial.print(F("PC baud=")); Serial.println(PC_BAUD);
+  Serial.print(F("HLK baud=")); Serial.println(HLK_BAUD);
+  Serial.println(F("Listening on RX3 (pin 15)..."));
+}
+
+void loop() {
+  while (Serial3.available()) {
+    uint8_t b = (uint8_t)Serial3.read();
+    if (blen < MAXF) buf[blen++] = b;
+    else { memmove(buf, buf + 1, MAXF - 1); buf[MAXF - 1] = b; }
+
+    int h = findSeq(buf, blen, HDR, 4);
+    if (h >= 0) {
+      int t = findSeq(buf + h + 4, blen - (h + 4), TAIL, 4);
+      if (t >= 0) {
+        t += (h + 4);
+        size_t framelen = (size_t)(t - h + 4);
+        tryDecodeMove(buf + h, framelen);
+
+        size_t remain = blen - (t + 4);
+        if (remain > 0) memmove(buf, buf + t + 4, remain);
+        blen = remain;
+      }
+    }
+
+    if (blen > 64) { memmove(buf, buf + blen/2, blen - blen/2); blen -= blen/2; }
+  }
+}
