@@ -1,0 +1,47 @@
+// Mega 2560 — receive "S=B,MM=<cm>,ANY=<0|1>" from NodeMCU on Serial1
+// Wiring: NodeMCU D8 (TX after swap) -> Mega RX1 (pin 19)
+// Baud must match NodeMCU/HLK (e.g., 256000)
+
+#include <Arduino.h>
+
+static const uint32_t LINK_BAUD = 256000;  // same as HLK_BAUD on NodeMCU
+static const uint32_t PC_BAUD   = 115200;  // Serial Monitor
+
+void setup() {
+  Serial.begin(PC_BAUD);
+  Serial1.begin(LINK_BAUD); // from NodeMCU
+  Serial.println("\nMega: listening on Serial1 for S=B,MM=<cm>,ANY=<0|1>");
+}
+
+void loop() {
+  static String buf;
+  while (Serial1.available()) {
+    char c = Serial1.read();
+    if (c == '\n') {
+      buf.trim();
+      if (buf.length()) {
+        // Simple parse & print
+        // Expected: S=B,MM=123,ANY=1
+        int mmPos  = buf.indexOf("MM=");
+        int anyPos = buf.indexOf("ANY=");
+        long mm = -1; int any = 0;
+        if (mmPos >= 0) {
+          int end = buf.indexOf(',', mmPos);
+          String v = (end<0) ? buf.substring(mmPos+3) : buf.substring(mmPos+3, end);
+          mm = v.toInt();
+        }
+        if (anyPos >= 0) {
+          String v = buf.substring(anyPos+4);
+          any = v.toInt();
+        }
+        Serial.print("Move=");
+        Serial.print(mm);
+        Serial.print("cm  ANY=");
+        Serial.println(any);
+      }
+      buf.remove(0);
+    } else if (c != '\r') {
+      if (buf.length() < 100) buf += c; else buf.remove(0);
+    }
+  }
+}
