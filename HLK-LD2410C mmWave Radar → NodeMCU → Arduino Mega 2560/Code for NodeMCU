@@ -1,0 +1,103 @@
+// NodeMCU (ESP8266) — HLK-LD2410C on UART0 via Serial.swap()
+// Pins after swap: RX0=D7 (GPIO13), TX0=D8 (GPIO15)
+// Wiring:
+//   HLK TX -> NodeMCU D7
+//   (opt) HLK RX -> NodeMCU D8
+//   NodeMCU D8 -> Mega RX1 (pin 19)
+// Power: Mega 5V -> NodeMCU VIN, GND common; HLK 5V/GND same rails.
+//
+// Outputs (to Mega at the same baud as HLK):
+//   S=B,MM=<move_cm>,ANY=<0|1>\n
+
+#include <Arduino.h>
+
+// ---- Baud (set to your HLK setting; typical default 256000) ----
+static const uint32_t HLK_BAUD = 256000;
+
+// Frame markers
+const uint8_t HDR[4]  = {0xF4,0xF3,0xF2,0xF1};
+const uint8_t TAIL[4] = {0xF8,0xF7,0xF6,0xF5};
+
+// Buffer
+static const size_t MAXF = 128;
+uint8_t buf[MAXF];
+size_t  blen = 0;
+
+// Threshold
+const uint16_t THRESH_CM = 50;
+
+// ---- helpers ----
+int findSeq(const uint8_t* hay, size_t n, const uint8_t* needle, size_t m){
+  if (m==0 || n<m) return -1;
+  for (size_t i=0;i<=n-m;i++){
+    bool ok=true;
+    for (size_t j=0;j<m;j++){ if (hay[i+j]!=needle[j]){ ok=false; break; } }
+    if (ok) return (int)i;
+  }
+  return -1;
+}
+
+bool decodeMove(const uint8_t* frame, size_t n, uint16_t &moveCm) {
+  int h = findSeq(frame, n, HDR, 4);
+  int t = findSeq(frame, n, TAIL, 4);
+  if (h < 0 || t < 0 || t <= h+4) return false;
+  const uint8_t* pay = frame + h + 4;
+  size_t payLen = (size_t)(t - (h + 4));
+
+  // Two common layouts (A/B). Take first valid under 600 cm.
+  // Layout A offsets:
+  if (payLen >= 14) {
+    uint16_t mD = (uint16_t)pay[5] | ((uint16_t)pay[6] << 8);
+    if (mD > 0 && mD < 600) { moveCm = mD; return true; }
+  }
+  // Layout B offsets:
+  if (payLen >= 16) {
+    uint16_t mD = (uint16_t)pay[7] | ((uint16_t)pay[8] << 8);
+    if (mD > 0 && mD < 600) { moveCm = mD; return true; }
+  }
+  return false;
+}
+
+void setup() {
+  // Swap UART0 to D7 (RX) / D8 (TX) so USB/UART0 conflict is avoided
+  Serial.begin(HLK_BAUD);
+  Serial.swap();  // now RX0=D7, TX0=D8
+
+  // Tiny banner (goes to Mega, not to PC)
+  Serial.print(F("S=B,MM=-1,ANY=0\n"));
+}
+
+void loop() {
+  // Read bytes from HLK into buffer
+  while (Serial.available()) {
+    uint8_t b = (uint8_t)Serial.read();
+    if (blen < MAXF) buf[blen++] = b;
+    else { memmove(buf, buf+1, MAXF-1); buf[MAXF-1] = b; }
+
+    int h = findSeq(buf, blen, HDR, 4);
+    if (h >= 0) {
+      int t = findSeq(buf + h + 4, blen - (h + 4), TAIL, 4);
+      if (t >= 0) {
+        t += (h + 4);
+        size_t framelen = (size_t)(t - h + 4);
+
+        uint16_t moveCm = 0;
+        bool ok = decodeMove(buf + h, framelen, moveCm);
+        if (ok) {
+          bool any = (moveCm <= THRESH_CM);
+          Serial.print(F("S=B,MM="));
+          Serial.print(moveCm);
+          Serial.print(F(",ANY="));
+          Serial.print(any ? 1 : 0);
+          Serial.print('\n');
+        }
+
+        // drop consumed data
+        size_t remain = blen - (t + 4);
+        if (remain > 0) memmove(buf, buf + t + 4, remain);
+        blen = remain;
+      }
+    }
+    if (blen > 64) { memmove(buf, buf + blen/2, blen - blen/2); blen -= blen/2; }
+  }
+}
