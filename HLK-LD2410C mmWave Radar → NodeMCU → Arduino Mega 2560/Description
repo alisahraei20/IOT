@@ -1,0 +1,62 @@
+Overview
+
+This project connects the HLK-LD2410C millimeter-wave radar to a NodeMCU (ESP8266), which decodes movement distance data and then transmits it via UART to an Arduino Mega 2560.
+
+The NodeMCU acts as a data parser and serial bridge, converting raw HLK UART frames into a simple ASCII message format readable by the Mega.
+The Mega then displays the received movement distance (MM) and detection flag (ANY) on the Serial Monitor.
+
+🔌 Pin Configuration
+🟩 NodeMCU (ESP8266) Connections
+Component	                                                        NodeMCU Pin	                                                    Description
+HLK TX	                                                            D7 (GPIO13)	                                    NodeMCU receives radar UART data
+HLK RX (optional)	                                                  D8 (GPIO15)	                                NodeMCU transmits (for configuration if needed)
+NodeMCU D8 (TX after swap)	                                    → Mega RX1 (Pin 19)	                                    Sends decoded data to Arduino Mega
+NodeMCU VIN	                                                    ← Mega 5 V	                                                  Power supply from Mega
+NodeMCU GND	                                                 Common Ground with Mega & HLK	                                      Shared ground
+HLK VCC	                                                            5 V (from Mega)	                                                Radar power
+HLK GND	                                                        Common Ground	                                                      Shared ground
+
+⚠️ Ensure all devices share a common ground. Power NodeMCU through VIN (5 V) — not 3.3 V.
+
+🟩 Arduino Mega 2560 Connections
+Connection	                                                      Arduino Pin	                                                      Description
+From NodeMCU D8 (TX)	                                            RX1 (Pin 19)	                                            Serial1 input from NodeMCU
+GND	                                                                Common	                                                Shared with NodeMCU and HLK
+
+- The HLK sensor continuously sends binary UART data (default 256000 baud)
+- The NodeMCU parses that data, extracts move distance, applies a 50 cm threshold, and sends formatted ASCII strings to the Mega in this form:
+
+Output: S=B,MM=47,ANY=1
+
+The Arduino Mega reads the line, extracts values, and prints them to the Serial Monitor.
+
+🧠 Data Format
+Field	                                                    Meaning
+S=B	                                Source identifier (B = Back sensor, can be customized)
+MM	                                  Movement distance (in cm) extracted from HLK frame
+ANY	                                  Binary flag (1 if object ≤ 50 cm, else 0)
+
+💻 NodeMCU Code Summary
+- Uses Serial.swap() to reassign UART0: RX → D7, TX → D8, freeing the USB UART.
+- Reads binary data frames from HLK-LD2410C.
+- Parses header (F4 F3 F2 F1) and tail (F8 F7 F6 F5).
+- Extracts move distance using layout offsets.
+- Outputs formatted ASCII message to Mega.
+
+💻 Arduino Mega Code Summary
+Listens on Serial1 (RX1=Pin 19) at the same baud rate as HLK/NodeMCU (typically 256000 bps).
+Parses the incoming S=B,MM=<cm>,ANY=<0|1> string.
+Displays readable values on the Serial Monitor (115200 bps).
+
+🧾 Results and Features
+✅ Real-time distance measurement from HLK-LD2410C via NodeMCU
+✅ Reliable UART-to-UART bridge from NodeMCU → Arduino Mega
+✅ Clean, readable ASCII output for integration with other systems
+✅ Ideal for Smart Bicycle EWS, collision detection, or IoT presence sensing
+
+🧰 Required Components
+1× HLK-LD2410C mmWave Radar Sensor
+1× NodeMCU ESP8266 Board
+1× Arduino Mega 2560 R3
+Jumper wires (male–male)
+Common ground connection across all modules
