@@ -1,0 +1,51 @@
+Overview
+
+This sketch demonstrates how to connect the HLK-LD2410C millimeter-wave radar sensor to an Arduino Mega 2560 R3 using UART communication (Serial3) to extract only the moving-target distance.
+It continuously parses the binary UART frames coming from the radar and prints the movement distance (in cm) to the Serial Monitor in real time.
+
+Unlike versions that rely on the sensor’s digital OUT pin, this program decodes the raw UART data directly — giving you access to the actual measured distances.
+
+🔌 Pin Configuration
+HLK-LD2410C Pin	                                              Arduino Mega 2560 Pin	                                                Description
+TX	                                                              RX3 (pin 15)	                                          Sensor → Mega (Serial3 input)
+VCC	                                                            5 V (or 3.3 V if preferred)	                                        Power supply
+GND	                                                                    GND	                                                        Common ground
+RX	                                                                (not used)	                                    Optional TX3 (pin 14) if you need to send configuration commands
+
+
+⚠️ Logic-Level Note
+The HLK-LD2410C’s RX pin is 3.3 V tolerant.
+If you later connect Mega TX3 → HLK RX, use a voltage divider (≈ 3.3 kΩ to RX, 1.8 kΩ to GND).
+
+⚙️ Configuration Parameters
+Constant	                                            Default	                                            Description
+PC_BAUD	                                              115200 bps	                              Baud rate for Serial Monitor
+HLK_BAUD	                                            256000 bps	                              Default UART speed of LD2410C module
+MAXF	                                                128 bytes	                                    Buffer size for frame storage
+
+🧠 How It Works
+
+1- Serial Listening: The Arduino reads bytes from Serial3 (the radar’s TX line).
+2- Frame Detection: It searches for frame headers (F4 F3 F2 F1) and tails (F8 F7 F6 F5) to identify valid HLK data frames.
+3- Payload Decoding: Within each frame, the code extracts only the move-distance field (in centimeters).
+4- Output: The measured distance of a moving object is printed to the Serial Monitor as:
+
+Output: Move=XXcm
+where XX is the detected distance.
+
+🧾 Results and Applications
+✅ Accurately measures moving-target distance up to ≈6 m (typical range)
+✅ Ignores static objects — ideal for motion sensing and occupancy detection
+✅ Real-time data stream through UART for IoT integration
+✅ Perfect for:
+
+Smart lighting or door activation
+Smart bicycle rear detection systems
+Obstacle or presence monitoring
+Industrial automation and safety zones
+
+🧰 Hardware Requirements
+Arduino Mega 2560 R3
+HLK-LD2410C mmWave radar sensor
+Jumper wires
+(Optional) Voltage divider resistors 3.3 kΩ + 1.8 kΩ for TX level shifting
