@@ -1,0 +1,68 @@
+🟢 Dual Ultrasonic Sensor (HC-SR04) with Raspberry Pi 5
+
+  This project demonstrates how to connect two HC-SR04 ultrasonic distance sensors to a Raspberry Pi 5, read distance measurements quickly and reliably, and avoid common issues such as false long-distance readings and GPIO damage.
+
+  The project is suitable for beginners and can be extended to applications such as parking systems, obstacle detection, safety systems, and IoT projects.
+
+🔧 Hardware Requirements
+
+  Raspberry Pi 5
+
+  2 × HC-SR04 Ultrasonic Sensors
+
+  Breadboard
+
+  Jumper wires (male–female)
+
+  Resistors (for each sensor):
+
+  1 × 1kΩ
+
+  1 × 2kΩ
+
+⚠️ Important:
+  Raspberry Pi GPIO pins operate at 3.3V, while the HC-SR04 Echo pin outputs 5V.
+  A voltage divider is mandatory to protect the Raspberry Pi.
+
+⚡ Power Connections
+
+Both ultrasonic sensors share the same power rails.
+
+Raspberry Pi Pin	Connection
+Pin 2 (5V)	Breadboard + (Red rail)
+Pin 6 (GND)	Breadboard − (Blue rail)
+
+For each sensor:
+
+VCC → Red (+) rail
+
+GND → Blue (−) rail
+
+📌 GPIO Pin Assignment
+  Ultrasonic Sensor 1
+  Function	GPIO (BCM)	Physical Pin
+  TRIG1	GPIO 23	Pin 16
+  ECHO1	GPIO 24	Pin 18 (via voltage divider)
+  Ultrasonic Sensor 2
+  Function	GPIO (BCM)	Physical Pin
+  TRIG2	GPIO 17	Pin 11
+  ECHO2	GPIO 27	Pin 13 (via voltage divider)
+
+🔒 Voltage Divider (Echo Pin Protection)
+
+Each Echo pin must have its own voltage divider:
+
+HC-SR04 Echo
+     |
+    1kΩ
+     |
+     ●──────> Raspberry Pi GPIO (Echo)
+     |
+    2kΩ
+     |
+    GND
+
+
+✔ Reduces 5V → ~3.3V
+✔ Prevents permanent GPIO damage
+✔ Required for each sensor independently
